@@ -5,12 +5,12 @@ import streamlit as st
 import boto3
 from botocore.exceptions import ClientError
 from pathlib import Path
+from typing import Any # Import Any
 import config # Import config for defaults like region
 
 # --- AWS S3 Client Initialization (Cached) ---
-# Cache the S3 client resource to avoid recreating it on every script run
 @st.cache_resource(show_spinner="Verbinde mit AWS S3...")
-def get_s3_client(aws_access_key_id: str, aws_secret_access_key: str, region_name: str | None, bucket_name: str) -> boto3.client | None:
+def get_s3_client(aws_access_key_id: str, aws_secret_access_key: str, region_name: str | None, bucket_name: str) -> Any | None: # Changed boto3.client to Any
     """
     Initializes and returns an S3 client using credentials.
     Tests the connection by trying to access the bucket.
@@ -26,7 +26,7 @@ def get_s3_client(aws_access_key_id: str, aws_secret_access_key: str, region_nam
         # Test connection by trying to access the bucket head
         s3_client.head_bucket(Bucket=bucket_name)
         print(f"Successfully connected to S3 bucket '{bucket_name}' in region '{resolved_region}'.")
-        return s3_client
+        return s3_client # Return the actual client object
     except ClientError as e:
         error_code = e.response.get('Error', {}).get('Code', 'Unknown')
         if error_code == '404' or 'NotFound' in str(e):
