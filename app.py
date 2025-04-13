@@ -190,12 +190,11 @@ if (new_activity_key != st.session_state.current_activity_key and
             st.error("Konnte die Chat-Sitzung für den neuen Modus nicht starten.")
             # Reset activity state if session start fails
             st.session_state.current_activity_key = None
-            st.session_state.sidebar_activity_selection = config.PLATZHALTER_AUSWAHL_ACTIVITY
+
     else:
         st.error("Konnte das KI-Modell für den neuen Modus nicht initialisieren.")
         # Reset activity state if model init fails
         st.session_state.current_activity_key = None
-        st.session_state.sidebar_activity_selection = config.PLATZHALTER_AUSWAHL_ACTIVITY
 
 
 # --- 8. Display Chat Messages ---
