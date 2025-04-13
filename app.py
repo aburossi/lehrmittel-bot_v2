@@ -2,7 +2,7 @@
 """Main Streamlit application file for the LearnLM Tutor."""
 
 import streamlit as st
-from google.generativeai import ChatSession # Only for type hint
+from google.generativeai import ChatSession  # Only for type hint
 
 # Import modules from the repository
 import config
@@ -26,19 +26,19 @@ if not st.session_state.secrets:
     st.session_state.secrets = secrets_handler.load_secrets()
     # Configure GenAI only once after secrets are loaded
     if not llm_handler.configure_genai(st.session_state.secrets["GEMINI_API_KEY"]):
-        st.stop() # Stop if GenAI config fails
+        st.stop()  # Stop if GenAI config fails
 
 # Initialize S3 client only once
 if not st.session_state.s3_client:
     st.session_state.s3_client = s3_handler.get_s3_client(
         aws_access_key_id=st.session_state.secrets["AWS_ACCESS_KEY_ID"],
         aws_secret_access_key=st.session_state.secrets["AWS_SECRET_ACCESS_KEY"],
-        region_name=st.session_state.secrets.get("AWS_REGION"), # Uses optional value
+        region_name=st.session_state.secrets.get("AWS_REGION"),  # Uses optional value
         bucket_name=st.session_state.secrets["S3_BUCKET_NAME"]
     )
     if not st.session_state.s3_client:
         st.error("S3 Client konnte nicht initialisiert werden. Die Anwendung kann nicht fortfahren.")
-        st.stop() # Stop if S3 client fails
+        st.stop()  # Stop if S3 client fails
 
 # --- 3. Load Available Subchapters ---
 if not st.session_state.subchapter_map and st.session_state.s3_client:
@@ -57,13 +57,13 @@ subchapter_options = [config.PLATZHALTER_AUSWAHL_KAPITEL] + list(st.session_stat
 # Check if the previously selected name is still valid
 current_selection_name = st.session_state.selected_subchapter_name
 if current_selection_name not in subchapter_options:
-    current_selection_name = config.PLATZHALTER_AUSWAHL_KAPITEL # Reset if invalid
+    current_selection_name = config.PLATZHALTER_AUSWAHL_KAPITEL  # Reset if invalid
 
 selected_name = st.selectbox(
     "Wähle das Unterkapitel aus, das du lernen möchtest:",
     options=subchapter_options,
-    index=subchapter_options.index(current_selection_name), # Keep selection across reruns
-    key="sbSubchapterSelect" # Unique key for the selectbox
+    index=subchapter_options.index(current_selection_name),  # Keep selection across reruns
+    key="sbSubchapterSelect"  # Unique key for the selectbox
 )
 
 # --- 5. Handle Subchapter Change ---
@@ -78,7 +78,7 @@ if selected_name != st.session_state.selected_subchapter_name:
         st.session_state.selected_subchapter_key = st.session_state.subchapter_map.get(selected_name)
 
         if st.session_state.selected_subchapter_key:
-            # Load content
+            # Load content from S3
             content = s3_handler.load_subchapter_content_from_s3(
                 st.session_state.secrets["S3_BUCKET_NAME"],
                 st.session_state.selected_subchapter_key,
@@ -96,7 +96,7 @@ if selected_name != st.session_state.selected_subchapter_name:
             else:
                 # Loading failed (error shown by loader function)
                 st.error(f"Konnte Inhalt für '{selected_name}' nicht laden.")
-                state_manager.reset_subchapter_state() # Full reset on load failure
+                state_manager.reset_subchapter_state()  # Full reset on load failure
                 state_manager.add_message("assistant", config.INITIAL_ASSISTANT_MESSAGE)
         else:
             # Should not happen if map is correct, but handle defensively
@@ -106,7 +106,6 @@ if selected_name != st.session_state.selected_subchapter_name:
 
     # Rerun to update UI immediately after state changes
     st.rerun()
-
 
 # --- 6. Sidebar for Activity Selection ---
 with st.sidebar:
@@ -118,29 +117,27 @@ with st.sidebar:
     else:
         st.warning("Bitte zuerst ein Kapitel im Hauptbereich auswählen.")
 
-    # Activity selection - enabled only if a chapter is selected and loaded
+    # Activity selection – enabled only if a chapter is selected and loaded
     activity_disabled = st.session_state.subchapter_content is None
 
     selected_activity_display_name = st.radio(
         "Wähle eine Lernaktivität:",
         options=config.AVAILABLE_ACTIVITIES,
-        key="sidebar_activity_selection", # Use the state variable directly
+        key="sidebar_activity_selection",  # Use the state variable directly
         disabled=activity_disabled,
-        # index=0 # Start with placeholder selected
     )
 
-    # Add a reset button
+    # Reset button to clear the chat state
     if st.button("Chat zurücksetzen", disabled=activity_disabled):
         state_manager.reset_chat_state(clear_model=True)
-        # Add a message indicating reset (optional)
+        # Optionally add a reset message
         state_manager.add_message("assistant", "Chat wurde zurückgesetzt. Bitte wähle einen neuen Lernmodus.")
         st.rerun()
-
 
 # --- 7. Handle Activity Change (Model/Session Reload) ---
 new_activity_key = config.ACTIVITY_KEY_MAP.get(selected_activity_display_name)
 
-# Check if activity changed *and* a valid chapter is loaded *and* it's not the placeholder
+# Check if activity changed, a valid chapter is loaded, and it's not the placeholder
 if (new_activity_key != st.session_state.current_activity_key and
     new_activity_key is not None and
     st.session_state.subchapter_content is not None):
@@ -149,7 +146,7 @@ if (new_activity_key != st.session_state.current_activity_key and
     st.session_state.current_activity_key = new_activity_key
 
     # 1. Get current history (important!)
-    current_history = st.session_state.messages # Use the simple list format
+    current_history = st.session_state.messages  # Using the simple list format
 
     # 2. Create the new system prompt for the selected activity
     system_prompt = llm_handler.create_system_prompt(
@@ -158,15 +155,14 @@ if (new_activity_key != st.session_state.current_activity_key and
         subchapter_content=st.session_state.subchapter_content
     )
 
-    # 3. Initialize the model with the new prompt
-    # Model initialization is cached by llm_handler based on system_prompt
+    # 3. Initialize the model with the new prompt (this is cached in llm_handler)
     st.session_state.learnlm_model = llm_handler.initialize_learnlm_model(system_prompt)
 
     if st.session_state.learnlm_model:
         # 4. Start a new chat session with the existing history
         st.session_state.chat_session = llm_handler.start_chat_session(
             st.session_state.learnlm_model,
-            history=current_history # Pass history to maintain context!
+            history=current_history  # Pass history to maintain context
         )
 
         if st.session_state.chat_session:
@@ -175,45 +171,58 @@ if (new_activity_key != st.session_state.current_activity_key and
             formatted_start_message = start_message.format(subchapter_name=st.session_state.selected_subchapter_name)
 
             # Send this initial message to the LLM to get the *actual* first turn/question
-            initial_llm_response = llm_handler.send_message(st.session_state.chat_session, f"System: Starte Modus '{selected_activity_display_name}'. Gib die erste Anweisung oder Frage aus.")
+            initial_llm_response = llm_handler.send_message(
+                st.session_state.chat_session,
+                f"System: Starte Modus '{selected_activity_display_name}'. Gib die erste Anweisung oder Frage aus."
+            )
 
-            # Display a message indicating the mode change
+            # Indicate the mode change
             state_manager.add_message("assistant", f"Okay, ich wechsle in den Modus: **{selected_activity_display_name}**.")
             if initial_llm_response:
-                 state_manager.add_message("assistant", initial_llm_response)
+                state_manager.add_message("assistant", initial_llm_response)
             else:
-                 state_manager.add_message("assistant", "Ich bin bereit. Wie kann ich dir in diesem Modus helfen?") # Fallback
-
-            # Rerun to update the chat display with the mode change and initial message
-            st.rerun()
+                state_manager.add_message("assistant", "Ich bin bereit. Wie kann ich dir in diesem Modus helfen?")
+            
+            st.rerun()  # Rerun to update the chat display
         else:
             st.error("Konnte die Chat-Sitzung für den neuen Modus nicht starten.")
-            # Reset activity state if session start fails
             st.session_state.current_activity_key = None
-
     else:
         st.error("Konnte das KI-Modell für den neuen Modus nicht initialisieren.")
-        # Reset activity state if model init fails
         st.session_state.current_activity_key = None
-
 
 # --- 8. Display Chat Messages ---
 st.markdown("---")
 st.subheader("Chat")
 
-if not st.session_state.messages:
-     if st.session_state.selected_subchapter_name == config.PLATZHALTER_AUSWAHL_KAPITEL:
-          st.info(config.INITIAL_ASSISTANT_MESSAGE)
-     elif st.session_state.subchapter_content and not st.session_state.current_activity_key:
-          st.info(config.CHAPTER_SELECTED_MESSAGE.format(subchapter_name=st.session_state.selected_subchapter_name))
-     # Add other placeholder messages if needed
+# --- Helper: Convert message to new display format ---
+def convert_for_display(message: dict) -> dict:
+    """
+    Ensure that each message has a 'parts' key containing a list of parts,
+    each with a 'text' key. If the message only has 'content', convert it.
+    """
+    if "content" in message and "parts" not in message:
+        return {
+            "role": message["role"],
+            "parts": [{"text": message["content"]}]
+        }
+    return message
 
+# If no messages exist, show appropriate placeholder info.
+if not st.session_state.messages:
+    if st.session_state.selected_subchapter_name == config.PLATZHALTER_AUSWAHL_KAPITEL:
+        st.info(config.INITIAL_ASSISTANT_MESSAGE)
+    elif st.session_state.subchapter_content and not st.session_state.current_activity_key:
+        st.info(config.CHAPTER_SELECTED_MESSAGE.format(subchapter_name=st.session_state.selected_subchapter_name))
+
+# Display each message with conversion if needed.
 for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+    formatted_message = convert_for_display(message)
+    with st.chat_message(formatted_message["role"]):
+        st.markdown(formatted_message["parts"][0]["text"])
 
 # --- 9. Handle User Input ---
-# Determine if chat input should be disabled
+# Determine if chat input should be disabled based on state
 chat_input_disabled = (
     st.session_state.subchapter_content is None or
     st.session_state.current_activity_key is None or
@@ -225,25 +234,25 @@ if st.session_state.subchapter_content is None:
 elif st.session_state.current_activity_key is None:
     disabled_reason = "Bitte wähle links einen Lernmodus."
 elif st.session_state.chat_session is None:
-    disabled_reason = "Chat-Sitzung wird initialisiert..." # Or specific error
+    disabled_reason = "Chat-Sitzung wird initialisiert..."
 
 user_prompt = st.chat_input(
-    f"Deine Frage im Modus '{st.session_state.sidebar_activity_selection}'..." if not chat_input_disabled else disabled_reason,
+    f"Deine Frage im Modus '{st.session_state.sidebar_activity_selection}'..."
+    if not chat_input_disabled else disabled_reason,
     disabled=chat_input_disabled,
     key="user_chat_input"
 )
 
 if user_prompt:
-    # Add user message to state and display it immediately
+    # Add user message to state and display it immediately.
     state_manager.add_message("user", user_prompt)
     with st.chat_message("user"):
-         st.markdown(user_prompt)
+        st.markdown(user_prompt)
 
-    # Send message to LLM and get response
+    # Send the message to the LLM and get the assistant response.
     assistant_response = llm_handler.send_message(st.session_state.chat_session, user_prompt)
 
-    # Add assistant response to state
+    # Add assistant response to state.
     state_manager.add_message("assistant", assistant_response)
 
-    # Rerun to display the new assistant message
     st.rerun()
